@@ -1,22 +1,35 @@
 #include <Arduino.h>
 
-// Global variables
-bool shouldPrintDebug = true;
+// -----Global variables-----
+const bool shouldPrintDebug = true; // If true, debug values can be printed to the console via the serial interface.
+const int adcPin = A0;              // Pint A0 of the Wemos D1 Mini will be used as an ADC.
 
-// Declerations
+// -----Declerations-----
 void serialSetup(int baudRate);
 void serialPrintDebug(String s);
 void serialPrintLineDebug(String s);
+void testAdc(int sleepTime, uint8_t adcReadPin);
 
+/**
+ * The Wemos D1 mini is setup using this code block
+ *
+ * @return void
+ */
 void setup()
 {
   serialSetup(115200);
-  
+
   serialPrintLineDebug("Board setup complete...");
 }
 
+/**
+ * Main loop
+ *
+ * @return void
+ */
 void loop()
 {
+  testAdc(2000, adcPin);
 }
 
 /**
@@ -56,4 +69,18 @@ void serialPrintLineDebug(String s)
 {
   if (shouldPrintDebug)
     Serial.println(s);
+}
+
+/**
+ * Take an ADC measurement for the given pin, display the value and sleep for a given time.
+ *
+ * @param sleepTime sleep time in ms after reading and printing result
+ * @param adcReadPin Pin on the Wemos D1 mini to read
+ * @return void
+ */
+void testAdc(int sleepTime, uint8_t adcReadPin)
+{
+  int adcValue = analogRead(adcReadPin);
+  serialPrintLineDebug("ADC value: " + String(adcValue));
+  delay(sleepTime);
 }
