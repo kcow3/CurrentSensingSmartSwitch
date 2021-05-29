@@ -1,8 +1,9 @@
 #include <Arduino.h>
 
 // -----Global variables-----
-const bool shouldPrintDebug = true; // If true, debug values can be printed to the console via the serial interface.
-const int adcPin = A0;              // Pint A0 of the Wemos D1 Mini will be used as an ADC.
+const bool SHOULD_PRINT_DEBUG = true; // If true, debug values can be printed to the console via the serial interface.
+#define ADC_PIN A0                    // Pin A0 of the Wemos D1 Mini will be used as an ADC.
+#define LED_PIN D4                    // Pin D4 will be used to control a single NEO-Pixel LED.
 
 // -----Declerations-----
 void serialSetup(int baudRate);
@@ -29,7 +30,7 @@ void setup()
  */
 void loop()
 {
-  testAdc(2000, adcPin);
+  testAdc(2000, ADC_PIN);
 }
 
 /**
@@ -54,7 +55,7 @@ void serialSetup(int baudRate)
  */
 void serialPrintDebug(String s)
 {
-  if (shouldPrintDebug)
+  if (SHOULD_PRINT_DEBUG)
     Serial.print(s);
 }
 
@@ -67,7 +68,7 @@ void serialPrintDebug(String s)
  */
 void serialPrintLineDebug(String s)
 {
-  if (shouldPrintDebug)
+  if (SHOULD_PRINT_DEBUG)
     Serial.println(s);
 }
 
