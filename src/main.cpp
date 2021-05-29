@@ -19,6 +19,12 @@ void loop()
 {
 }
 
+/**
+ * Setup the serial interface of the board to the specified baudrate.
+ *
+ * @param baudRate The baudrate to use.
+ * @return void
+ */
 void serialSetup(int baudRate)
 {
   Serial.begin(baudRate);
