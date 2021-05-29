@@ -1,4 +1,4 @@
-# CurrentSensingSmartSwitch
+# Current Sensing Smart Switch
 
 This project can be used to to calculate the power state of an appliance using a ESP8266 based Microcontroller. 
 A current-sensing module will be used to determine if the power state of the connected appliance.
