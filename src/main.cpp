@@ -1,5 +1,7 @@
 #include <Arduino.h>
 #include <FastLED.h>
+#include <ESP8266WiFi.h>
+#include <PubSubClient.h>
 
 // -----Pin Assignments-----
 #define ADC_PIN A0 // Pin A0 of the Wemos D1 Mini will be used as an ADC.
@@ -10,12 +12,32 @@ const bool SHOULD_PRINT_DEBUG = true; // If true, debug values can be printed to
 #define NUM_LEDS 1                    // Number of Neo-pixel LEDs to use
 CRGB leds[NUM_LEDS];                  // Define LED array that will be used to control an indicator LED.
 
+// -----Network setup-----
+const char *ssid = "ssid here";
+const char *password = "password here";
+const char *mqtt_server = "server address here";
+const String hostName = "hostname here";
+
+WiFiClient espClient;
+PubSubClient client(espClient);
+unsigned long lastMsg = 0;
+#define MSG_BUFFER_SIZE (50)
+char msg[MSG_BUFFER_SIZE];
+int value = 0;
+
 // -----Declerations-----
 void serialSetup(int baudRate);
 void serialPrintDebug(String s);
 void serialPrintLineDebug(String s);
+
 void testAdc(int sleepTime, uint8_t adcReadPin);
+
 void setupIndicatorLed();
+
+void setup_wifi();
+void callback(char *topic, byte *payload, unsigned int length);
+void reconnect();
+String IpAddressToString(const IPAddress &ipAddress);
 
 /**
  * The Wemos D1 mini is setup using this code block
@@ -24,8 +46,15 @@ void setupIndicatorLed();
  */
 void setup()
 {
+  // Setup serial communication
   serialSetup(115200);
+
+  // Setup LED indicator
   setupIndicatorLed();
+
+  // Setup Networking
+  pinMode(LED_BUILTIN, OUTPUT); // Initialize the BUILTIN_LED pin as an output
+  setup_wifi();
 
   serialPrintLineDebug("Board setup complete...");
 }
@@ -73,7 +102,7 @@ void serialPrintDebug(String s)
  * @param s The string that will be printed to the console
  * @return void
  */
-void serialPrintLineDebug(String s)
+void serialPrintLineDebug(String s = "")
 {
   if (SHOULD_PRINT_DEBUG)
     Serial.println(s);
@@ -115,6 +144,11 @@ void testAdc(int sleepTime, uint8_t adcReadPin)
   delay(sleepTime);
 }
 
+/**
+ * Setup the Neo-Pixel LED indicator.
+ *
+ * @return void
+ */
 void setupIndicatorLed()
 {
   serialPrintLineDebug("Setup Fast LED in order GRB...");
@@ -122,4 +156,61 @@ void setupIndicatorLed()
   leds[0] = CRGB::Black;
   FastLED.show();
   serialPrintLineDebug("Fast LED setup done...");
+}
+
+/**
+ * Setup the WiFi connection for the Wemos D1 mini.
+ *
+ * @return void
+ */
+void setup_wifi()
+{
+  serialPrintDebug("WiFi ssid set to: ");
+  serialPrintLineDebug(ssid);
+  delay(100);
+
+  WiFi.mode(WIFI_STA);
+
+  serialPrintDebug("Setting WiFi hostname to:");
+  serialPrintLineDebug(hostName);
+  WiFi.hostname(hostName.c_str());
+  delay(100);
+
+  serialPrintLineDebug("Connecting...");
+
+  WiFi.begin(ssid, password);
+
+  while (WiFi.status() != WL_CONNECTED)
+  {
+    delay(1000);
+    serialPrintDebug(".");
+  }
+
+  randomSeed(micros());
+  serialPrintLineDebug();
+
+  serialPrintLineDebug("WiFi connection established...");
+  serialPrintDebug("IP address:\t");
+  serialPrintLineDebug(IpAddressToString(WiFi.localIP()));
+}
+
+void callback(char *topic, byte *payload, unsigned int length)
+{
+}
+
+void reconnect()
+{
+}
+
+String IpAddressToString(const IPAddress &ipAddress)
+{
+  if (!ipAddress.isSet())
+  {
+    return "No ip address set";
+  }
+
+  return String(ipAddress[0]) + String(".") +
+         String(ipAddress[1]) + String(".") +
+         String(ipAddress[2]) + String(".") +
+         String(ipAddress[3]);
 }
