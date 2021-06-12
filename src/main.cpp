@@ -13,12 +13,13 @@ const bool SHOULD_PRINT_DEBUG = true; // If true, debug values can be printed to
 CRGB leds[NUM_LEDS];                  // Define LED array that will be used to control an indicator LED.
 
 // -----Network setup-----
+WiFiClient espClient;
 const char *ssid = "ssid here";
 const char *password = "password here";
-const char *mqtt_server = "server address here";
-const String hostName = "hostname here";
+const char *mqtt_server = "ip address here";
+const String hostName = "unique hostname here";
 
-WiFiClient espClient;
+// -----MQTT setup-----
 PubSubClient client(espClient);
 unsigned long lastMsg = 0;
 #define MSG_BUFFER_SIZE (50)
@@ -26,17 +27,16 @@ char msg[MSG_BUFFER_SIZE];
 int value = 0;
 
 // -----Declerations-----
-void serialSetup(int baudRate);
-void serialPrintDebug(String s);
-void serialPrintLineDebug(String s);
-
-void testAdc(int sleepTime, uint8_t adcReadPin);
-
-void setupIndicatorLed();
-
-void setup_wifi();
-void callback(char *topic, byte *payload, unsigned int length);
-void reconnect();
+void Callback(char *topic, byte *payload, unsigned int length);
+void SerialSetup(int baudRate);
+void SerialPrintDebug(String s);
+void SerialPrintLineDebug(String s);
+void TestAdc(int sleepTime, uint8_t adcReadPin);
+void SetupIndicatorLed();
+void SetIndicatorLedColour(CRGB colour);
+void SetupWiFi();
+void Reconnect();
+void GetWifiHeartbeat();
 String IpAddressToString(const IPAddress &ipAddress);
 
 /**
@@ -47,16 +47,16 @@ String IpAddressToString(const IPAddress &ipAddress);
 void setup()
 {
   // Setup serial communication
-  serialSetup(115200);
+  SerialSetup(115200);
 
   // Setup LED indicator
-  setupIndicatorLed();
+  SetupIndicatorLed();
 
   // Setup Networking
-  pinMode(LED_BUILTIN, OUTPUT); // Initialize the BUILTIN_LED pin as an output
-  setup_wifi();
+  pinMode(LED_BUILTIN, OUTPUT);
+  SetupWiFi();
 
-  serialPrintLineDebug("Board setup complete...");
+  SerialPrintLineDebug("Board setup complete...");
 }
 
 /**
@@ -66,7 +66,8 @@ void setup()
  */
 void loop()
 {
-  testAdc(500, ADC_PIN);
+  TestAdc(2000, ADC_PIN);
+  GetWifiHeartbeat();
 }
 
 /**
@@ -75,11 +76,11 @@ void loop()
  * @param baudRate The baudrate to use.
  * @return void
  */
-void serialSetup(int baudRate)
+void SerialSetup(int baudRate)
 {
   Serial.begin(baudRate);
-  serialPrintLineDebug("");
-  serialPrintLineDebug("Serial setup done.");
+  SerialPrintLineDebug("");
+  SerialPrintLineDebug("Serial setup done...");
 }
 
 /**
@@ -89,7 +90,7 @@ void serialSetup(int baudRate)
  * @param s The string that will be printed to the console
  * @return void
  */
-void serialPrintDebug(String s)
+void SerialPrintDebug(String s)
 {
   if (SHOULD_PRINT_DEBUG)
     Serial.print(s);
@@ -102,7 +103,7 @@ void serialPrintDebug(String s)
  * @param s The string that will be printed to the console
  * @return void
  */
-void serialPrintLineDebug(String s = "")
+void SerialPrintLineDebug(String s = "")
 {
   if (SHOULD_PRINT_DEBUG)
     Serial.println(s);
@@ -115,32 +116,10 @@ void serialPrintLineDebug(String s = "")
  * @param adcReadPin Pin on the Wemos D1 mini to read
  * @return void
  */
-void testAdc(int sleepTime, uint8_t adcReadPin)
+void TestAdc(int sleepTime, uint8_t adcReadPin)
 {
   int adcValue = analogRead(adcReadPin);
-  serialPrintLineDebug("ADC value: " + String(adcValue));
-
-  if (adcValue >= 0 && adcValue <= 20)
-  {
-    leds[0] = CRGB::Green;
-    FastLED.show();
-    delay(10);
-  }
-
-  if (adcValue > 20 && adcValue <= 100)
-  {
-    leds[0] = CRGB::Blue;
-    FastLED.show();
-    delay(10);
-  }
-
-  if (adcValue > 100)
-  {
-    leds[0] = CRGB::Red;
-    FastLED.show();
-    delay(10);
-  }
-
+  SerialPrintLineDebug("ADC value: " + String(adcValue));
   delay(sleepTime);
 }
 
@@ -149,13 +128,24 @@ void testAdc(int sleepTime, uint8_t adcReadPin)
  *
  * @return void
  */
-void setupIndicatorLed()
+void SetupIndicatorLed()
 {
-  serialPrintLineDebug("Setup Fast LED in order GRB...");
+  SerialPrintLineDebug("Setup Fast LED in order GRB...");
   FastLED.addLeds<WS2812B, LED_PIN, GRB>(leds, NUM_LEDS);
-  leds[0] = CRGB::Black;
+  SetIndicatorLedColour(CRGB::Black);
+  SerialPrintLineDebug("Fast LED setup done...");
+}
+
+/**
+ * Set the colour of the connected LED indicator as specified.
+ *
+ * @param colour Set the indicator to colour (CRGB::<Colour here)
+ * @return void
+ */
+void SetIndicatorLedColour(CRGB colour)
+{
+  leds[0] = colour;
   FastLED.show();
-  serialPrintLineDebug("Fast LED setup done...");
 }
 
 /**
@@ -163,45 +153,66 @@ void setupIndicatorLed()
  *
  * @return void
  */
-void setup_wifi()
+void SetupWiFi()
 {
-  serialPrintDebug("WiFi ssid set to: ");
-  serialPrintLineDebug(ssid);
-  delay(100);
+  SerialPrintLineDebug("Starting WiFi setup...");
 
+  WiFi.disconnect();
   WiFi.mode(WIFI_STA);
-
-  serialPrintDebug("Setting WiFi hostname to:");
-  serialPrintLineDebug(hostName);
   WiFi.hostname(hostName.c_str());
-  delay(100);
-
-  serialPrintLineDebug("Connecting...");
-
   WiFi.begin(ssid, password);
+
+  SerialPrintDebug("Connecting...");
 
   while (WiFi.status() != WL_CONNECTED)
   {
+    SerialPrintDebug(".");
     delay(1000);
-    serialPrintDebug(".");
+    SetIndicatorLedColour(CRGB::Red);
   }
 
-  randomSeed(micros());
-  serialPrintLineDebug();
+  // Persist WiFi connection details
+  WiFi.persistent(true);
 
-  serialPrintLineDebug("WiFi connection established...");
-  serialPrintDebug("IP address:\t");
-  serialPrintLineDebug(IpAddressToString(WiFi.localIP()));
+  //  Print out connection details
+  SerialPrintLineDebug();
+  SerialPrintLineDebug("WiFi connection established...");
+  SerialPrintDebug("IP address:\t");
+  SerialPrintLineDebug(IpAddressToString(WiFi.localIP()));
 }
 
-void callback(char *topic, byte *payload, unsigned int length)
+/**
+ * Update the indicator LED based on the status of the WiFi connection
+ *
+ * @return void
+ */
+void GetWifiHeartbeat()
+{
+  if (WiFi.status() != WL_CONNECTED)
+  {
+    SetIndicatorLedColour(CRGB::Red);
+  }
+  else
+  {
+    SetIndicatorLedColour(CRGB::Green);
+  }
+}
+
+// TODO: MQTT
+void Callback(char *topic, byte *payload, unsigned int length)
 {
 }
 
-void reconnect()
+// TODO: MQTT
+void Reconnect()
 {
 }
 
+/**
+ * Prints out an IP address in the format xxx.xxx.xxx.xxx
+ * @param ipAddress The IP Address to print
+ * @return void
+ */
 String IpAddressToString(const IPAddress &ipAddress)
 {
   if (!ipAddress.isSet())
